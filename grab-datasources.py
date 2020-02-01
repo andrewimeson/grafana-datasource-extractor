@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import pymysql.cursors
+from ruamel.yaml import YAML
 import sys
 import json as json
 # TODO: Support multiple database types (SQLite, etc.)
@@ -18,23 +19,40 @@ connection = pymysql.connect(
 try:
     with connection.cursor() as cursor:
         sql = """
-        SELECT name, type, access, url, json_data AS jsonData, version
-        FROM `data_source` 
-        WHERE type = 'grafana-influxdb-flux-datasource'
-        ORDER BY created LIMIT 1
+            SELECT name,
+                org_id AS orgId,
+                version,
+                type,
+                access,
+                url,
+                password,
+                user,
+                `database`,
+                basic_auth AS basicAuth,
+                basic_auth_user AS basicAuthUser,
+                basic_auth_password AS basicAuthPassword,
+                is_default AS isDefault,
+                json_data AS jsonData,
+                created,
+                updated,
+                with_credentials AS withCredentials,
+                secure_json_data AS secureJsonData
+            FROM `data_source`
+            WHERE TYPE = 'grafana-influxdb-flux-datasource'
+            ORDER BY created
+            LIMIT 1
         """
         cursor.execute(sql)
         result = cursor.fetchone()
-        result['jsonData'] = json.loads(result['jsonData'])
-        print('- name:', result["name"])
-        for key, value in result.items():
-            if key == "name":
-                pass
-            elif key == "jsonData":
-                print("  " + key + ":")
-                for dataKey, dataValue in value.items():
-                    print("    " + dataKey + ": " + str(dataValue))
-            else:
-                print("  " + key + ": " + str(value))
+        yaml = YAML()
+        for key, value in list(result.items()):
+            if type(value) == str:
+                if "{}" == value or "" == value:
+                    del result[key]
+        if 'jsonData' in result:
+            result['jsonData'] = json.loads(result['jsonData'])
+        if 'secureJsonData' in result:
+            result['secureJsonData'] = json.loads(result['secureJsonData'])
+        yaml.dump([result], sys.stdout)
 finally:
     connection.close()
